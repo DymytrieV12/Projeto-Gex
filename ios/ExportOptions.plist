@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Método de distribuição: app-store, ad-hoc, enterprise, development -->
+	<key>method</key>
+	<string>app-store</string>
+
+	<!-- Seu Team ID do Apple Developer (substituir pelo real) -->
+	<key>teamID</key>
+	<string>YOUR_TEAM_ID</string>
+
+	<!-- Estilo de assinatura -->
+	<key>signingStyle</key>
+	<string>manual</string>
+
+	<!-- Mapeamento Bundle ID → Provisioning Profile UUID -->
+	<key>provisioningProfiles</key>
+	<dict>
+		<!-- Substituir pelo Bundle ID e UUID reais -->
+		<key>com.greenexpress.orders</key>
+		<string>YOUR_PROVISIONING_PROFILE_UUID</string>
+	</dict>
+
+	<!-- Upload de símbolos para crash reports -->
+	<key>uploadSymbols</key>
+	<true/>
+
+	<!-- Upload de bitcode -->
+	<key>uploadBitcode</key>
+	<false/>
+</dict>
+</plist>
