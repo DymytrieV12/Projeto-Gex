@@ -149,12 +149,14 @@ class ItemPedido {
   final int quantidade;
   final double valorUnitario;
   final double subtotal;
+  final double valorDescontoUnitario;
 
   ItemPedido({
     required this.nomeProduto,
     this.fotoProduto,
     required this.quantidade,
     required this.valorUnitario,
+    this.valorDescontoUnitario = 0,
     required this.subtotal,
   });
 
@@ -163,9 +165,13 @@ class ItemPedido {
     final valorUnitario = _parseDouble(
       json['valorUnitario'] ?? json['valor'] ?? json['preco'] ?? 0,
     );
+    final valorDescontoUnitario = _parseDouble(json['valorDescontoUnitario']);
+    final precoFinal = valorDescontoUnitario > 0
+        ? (valorUnitario - valorDescontoUnitario)
+        : valorUnitario;
     final subtotal = _parseDouble(json['subtotal']) > 0
         ? _parseDouble(json['subtotal'])
-        : valorUnitario * quantidade;
+        : precoFinal * quantidade;
 
     String? foto = json['fotoProduto']?.toString();
     if (foto != null && foto.isNotEmpty && !foto.startsWith('http')) {
@@ -180,6 +186,7 @@ class ItemPedido {
       fotoProduto: foto,
       quantidade: quantidade,
       valorUnitario: valorUnitario,
+      valorDescontoUnitario: valorDescontoUnitario,
       subtotal: subtotal,
     );
   }
@@ -299,6 +306,73 @@ class TipoEntrega {
       id: json['id'] as int,
       descricao: json['descricao']?.toString() ?? '',
     );
+  }
+}
+
+class DescontoProgressivo {
+  final int id;
+  final String descricao;
+  final double valorMinimoCompra;
+  final double valorMinimoPrimeiraCompra;
+  final double descontoPorcentagem;
+  final bool greenExpress;
+
+  DescontoProgressivo({
+    required this.id,
+    required this.descricao,
+    required this.valorMinimoCompra,
+    required this.valorMinimoPrimeiraCompra,
+    required this.descontoPorcentagem,
+    this.greenExpress = false,
+  });
+
+  factory DescontoProgressivo.fromJson(Map<String, dynamic> json) {
+    return DescontoProgressivo(
+      id: json['id'] as int? ?? 0,
+      descricao: json['descricao']?.toString() ?? '',
+      valorMinimoCompra: _parseDouble(json['valorMinimoCompra']),
+      valorMinimoPrimeiraCompra: _parseDouble(json['valorMinimoPrimeiraCompra']),
+      descontoPorcentagem: _parseDouble(json['descontoPorcentagem']),
+      greenExpress: json['greenExpress'] as bool? ?? false,
+    );
+  }
+
+  /// Dado um subtotal, encontra a faixa de desconto aplicável
+  static DescontoProgressivo? findApplicable(
+    List<DescontoProgressivo> faixas,
+    double subtotal, {
+    bool isPrimeiraCompra = false,
+  }) {
+    // Filtrar apenas faixas de representante (não greenExpress)
+    final applicable = faixas.where((f) => !f.greenExpress).toList();
+    if (applicable.isEmpty) return null;
+
+    // Ordenar por valorMinimoCompra decrescente para encontrar a maior faixa
+    applicable.sort((a, b) => b.valorMinimoCompra.compareTo(a.valorMinimoCompra));
+
+    final minField = isPrimeiraCompra ? 'primeira' : 'normal';
+    for (final faixa in applicable) {
+      final minimo = isPrimeiraCompra
+          ? faixa.valorMinimoPrimeiraCompra
+          : faixa.valorMinimoCompra;
+      if (subtotal >= minimo) return faixa;
+    }
+    return applicable.last; // menor faixa como fallback
+  }
+
+  /// Encontra a próxima faixa de desconto (para incentivar)
+  static DescontoProgressivo? findNext(
+    List<DescontoProgressivo> faixas,
+    DescontoProgressivo? current,
+  ) {
+    if (current == null) return null;
+    final applicable = faixas.where((f) => !f.greenExpress).toList();
+    applicable.sort((a, b) => a.valorMinimoCompra.compareTo(b.valorMinimoCompra));
+    final idx = applicable.indexWhere((f) => f.id == current.id);
+    if (idx >= 0 && idx < applicable.length - 1) {
+      return applicable[idx + 1];
+    }
+    return null;
   }
 }
 

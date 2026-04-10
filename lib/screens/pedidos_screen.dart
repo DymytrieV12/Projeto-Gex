@@ -211,10 +211,20 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(
-                                    '${item.quantidade}x ${_currency(item.valorUnitario)}',
-                                    style: TextStyle(color: Colors.grey[700]),
-                                  ),
+                                  if (item.valorDescontoUnitario > 0) ...[                                  
+                                    Text(
+                                      '${item.quantidade}x ${_currency(item.valorUnitario)} (- ${_currency(item.valorDescontoUnitario)}/un)',
+                                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                                    ),
+                                    Text(
+                                      'Preco com desconto: ${_currency(item.valorUnitario - item.valorDescontoUnitario)}/un',
+                                      style: const TextStyle(color: Color(0xFF0E5A35), fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                  ] else
+                                    Text(
+                                      '${item.quantidade}x ${_currency(item.valorUnitario)}',
+                                      style: TextStyle(color: Colors.grey[700]),
+                                    ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'Subtotal: ${_currency(item.subtotal)}',

@@ -285,6 +285,21 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> getDescontoProgressivo() async {
+    await _loadToken();
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/api/pedidosrevendedor/desconto-progressivo'), headers: _headers)
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      }
+      return {'success': false, 'error': 'Erro ${response.statusCode}'};
+    } catch (e) {
+      return {'success': false, 'error': 'Erro: $e'};
+    }
+  }
+
   static Future<Map<String, dynamic>> getFormasPagamento() async {
     await _loadToken();
     try {
