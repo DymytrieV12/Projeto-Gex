@@ -1,20 +1,83 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/carrinho_provider.dart';
+import 'services/api_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/carrinho_screen.dart';
 
+/// Chave global do Navigator para redirect de qualquer lugar
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Garantir que a barra de navegação do sistema não sobreponha o app
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarContrastEnforced: false,
+  ));
+
   runApp(const GreenExpressApp());
 }
 
-class GreenExpressApp extends StatelessWidget {
+class GreenExpressApp extends StatefulWidget {
   const GreenExpressApp({super.key});
+  @override
+  State<GreenExpressApp> createState() => _GreenExpressAppState();
+}
+
+class _GreenExpressAppState extends State<GreenExpressApp> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Registrar callback global de sessão expirada
+    ApiService.onSessionExpired = _onSessionExpired;
+  }
+
+  void _onSessionExpired() {
+    final nav = navigatorKey.currentState;
+    if (nav == null) return;
+
+    // Limpar estado de auth
+    try {
+      final ctx = nav.context;
+      ctx.read<AuthProvider>().logout();
+    } catch (_) {}
+
+    // Navegar para login e mostrar diálogo
+    nav.pushNamedAndRemoveUntil('/login', (route) => false);
+
+    // Mostrar diálogo de sessão expirada após um frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = nav.overlay?.context;
+      if (ctx != null) {
+        showDialog(
+          context: ctx,
+          barrierDismissible: false,
+          builder: (c) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+            icon: const Icon(Icons.lock_clock, color: Colors.orange, size: 48),
+            title: const Text('Sessão Expirada'),
+            content: const Text('Sua sessão expirou. Por favor, faça login novamente para continuar.'),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Entrar novamente'),
+              ),
+            ],
+          ),
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +87,7 @@ class GreenExpressApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CarrinhoProvider()),
       ],
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'Green Express',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(

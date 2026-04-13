@@ -6,7 +6,8 @@ import '../providers/carrinho_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
-  @override State<SplashScreen> createState() => _SplashScreenState();
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen>
@@ -24,24 +25,33 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   @override
-  void dispose() { _ac.dispose(); super.dispose(); }
+  void dispose() {
+    _ac.dispose();
+    super.dispose();
+  }
 
   Future<void> _init() async {
     await context.read<CarrinhoProvider>().loadCarrinho();
     await context.read<AuthProvider>().checkAuthStatus();
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
-    Navigator.of(context).pushReplacementNamed(
-      context.read<AuthProvider>().isAuthenticated ? '/home' : '/login',
-    );
+
+    final isAuth = context.read<AuthProvider>().isAuthenticated;
+
+    // SEMPRE vai para login se não estiver autenticado (token expirado = não autenticado)
+    Navigator.of(context).pushReplacementNamed(isAuth ? '/home' : '/login');
   }
 
   @override
   Widget build(BuildContext context) {
+    // Padding bottom para barra de navegação do sistema
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       body: Container(
         width: double.infinity,
         height: double.infinity,
+        padding: EdgeInsets.only(bottom: bottomPad),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -70,11 +80,7 @@ class _SplashScreenState extends State<SplashScreen>
                         'assets/images/logo_green_express_full_white.png',
                         width: 280,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.eco,
-                          size: 80,
-                          color: Colors.white,
-                        ),
+                        errorBuilder: (_, __, ___) => const Icon(Icons.eco, size: 80, color: Colors.white),
                       ),
                     ),
                   ),
@@ -85,9 +91,7 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 28,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Colors.white.withValues(alpha: 0.8),
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withValues(alpha: 0.8)),
                   ),
                 ),
               ],

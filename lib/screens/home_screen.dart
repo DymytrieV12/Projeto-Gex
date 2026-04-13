@@ -205,20 +205,23 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: screens[_idx],
-      bottomNavigationBar: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: NavigationBar(
-            selectedIndex: _idx,
-            onDestinationSelected: (i) => setState(() => _idx = i),
-            backgroundColor: Colors.white.withValues(alpha: 0.82),
-            elevation: 0,
-            destinations: const [
-              NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Inicio'),
-              NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Produtos'),
-              NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Pedidos'),
+      // Usar SafeArea para que a barra de navegação do sistema não sobreponha
+      bottomNavigationBar: SafeArea(
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: NavigationBar(
+              selectedIndex: _idx,
+              onDestinationSelected: (i) => setState(() => _idx = i),
+              backgroundColor: Colors.white.withValues(alpha: 0.92),
+              elevation: 0,
+              destinations: const [
+                NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Inicio'),
+                NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Produtos'),
+                NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Pedidos'),
               NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Perfil'),
-            ],
+              ],
+            ),
           ),
         ),
       ),
