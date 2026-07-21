@@ -1,0 +1,161 @@
+# ═══════════════════════════════════════════════════════════
+# 🍎 Green Express — iOS Build & Deploy (App Store / TestFlight)
+# ═══════════════════════════════════════════════════════════
+#
+# Este workflow builda o app Flutter para iOS, assina com
+# certificados Apple e faz upload para o App Store Connect.
+#
+# SECRETS NECESSÁRIOS (configurar em Settings > Secrets):
+#   - BUILD_CERTIFICATE_BASE64  → Certificado .p12 em base64
+#   - P12_PASSWORD              → Senha do certificado .p12
+#   - BUILD_PROVISION_PROFILE_BASE64 → Provisioning Profile em base64
+#   - KEYCHAIN_PASSWORD         → Qualquer senha temporária para keychain
+#   - APPSTORE_API_KEY_ID       → App Store Connect API Key ID
+#   - APPSTORE_API_ISSUER_ID    → App Store Connect API Issuer ID
+#   - APPSTORE_API_PRIVATE_KEY  → App Store Connect API Private Key (.p8)
+#
+# COMO OBTER OS SECRETS:
+#   1. Apple Developer Portal → Certificates → Criar "Apple Distribution"
+#   2. Exportar como .p12 (com senha)
+#   3. base64 -i certificate.p12 | pbcopy  (colar no secret)
+#   4. Apple Developer Portal → Identifiers → Registrar Bundle ID
+#   5. Apple Developer Portal → Profiles → Criar "App Store" profile
+#   6. base64 -i profile.mobileprovision | pbcopy
+#   7. App Store Connect → Users → Keys → Gerar API Key
+# ═══════════════════════════════════════════════════════════
+
+name: "🍎 iOS Build & Deploy"
+
+on:
+  # Build automático ao fazer push na main
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/android-build.yml'
+
+  # Build manual pelo GitHub (botão "Run workflow")
+  workflow_dispatch:
+    inputs:
+      upload_to_testflight:
+        description: 'Upload para TestFlight?'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  FLUTTER_VERSION: '3.32.0'
+  XCODE_VERSION: '16.2'
+
+jobs:
+  # ─────────────────────────────────────────
+  # Job 1: Build iOS (.ipa)
+  # ─────────────────────────────────────────
+  build_ios:
+    name: "🔨 Build iOS"
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      # ── Checkout ──
+      - name: "📥 Checkout código"
+        uses: actions/checkout@v4
+
+      # ── Selecionar Xcode ──
+      - name: "🔧 Selecionar Xcode ${{ env.XCODE_VERSION }}"
+        run: |
+          sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
+          xcodebuild -version
+
+      # ── Instalar certificados Apple ──
+      - name: "🔑 Instalar certificados e provisioning profile"
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Variáveis de caminho
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          # Decodificar certificado e provisioning profile
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+          # Criar keychain temporária
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Importar certificado na keychain
+          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Instalar provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+
+          echo "✅ Certificados instalados com sucesso!"
+
+      # ── Instalar Flutter ──
+      - name: "🐦 Instalar Flutter"
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: "📦 Instalar dependências"
+        run: flutter pub get
+
+      # ── Análise estática ──
+      - name: "🔍 Analisar código"
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
+
+      # ── Build IPA ──
+      - name: "🏗️ Build iOS (.ipa)"
+        run: |
+          flutter build ipa \
+            --release \
+            --export-options-plist=ios/ExportOptions.plist
+
+      # ── Upload artefato (.ipa) ──
+      - name: "📤 Upload IPA como artefato"
+        uses: actions/upload-artifact@v4
+        with:
+          name: green-express-ios
+          path: build/ios/ipa/*.ipa
+          retention-days: 30
+
+      # ── Upload para App Store Connect / TestFlight ──
+      - name: "🚀 Upload para App Store Connect"
+        if: github.event.inputs.upload_to_testflight == 'true'
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          # Salvar API key
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo -n "$APPSTORE_API_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+
+          # Upload usando xcrun
+          xcrun altool --upload-app \
+            --type ios \
+            --file build/ios/ipa/*.ipa \
+            --apiKey $APPSTORE_API_KEY_ID \
+            --apiIssuer $APPSTORE_API_ISSUER_ID
+
+          echo "✅ Upload para App Store Connect concluído!"
+
+      # ── Limpeza ──
+      - name: "🧹 Limpar keychain"
+        if: ${{ always() }}
+        run: |
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
