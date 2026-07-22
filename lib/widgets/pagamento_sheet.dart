@@ -6,16 +6,17 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../screens/in_app_browser_screen.dart';
+import '../services/api_service.dart';
 
 Future<void> showPagamentoSheet(
   BuildContext context,
   Pedido pedido, {
   String? fallbackNumero,
-}) {
+}) async {
   final numero = pedido.numeroPedido?.trim().isNotEmpty == true
       ? pedido.numeroPedido!
       : (fallbackNumero?.trim().isNotEmpty == true ? fallbackNumero! : pedido.id);
-  final linkPrincipal = _resolvePreferredLink(pedido);
+  final linkPrincipal = await _resolvePreferredLink(pedido);
 
   return showModalBottomSheet<void>(
     context: context,
@@ -214,15 +215,18 @@ Future<void> openPagamentoNoApp(BuildContext context, String url) async {
   );
 }
 
-String? _resolvePreferredLink(Pedido pedido) {
-  final values = [
-    pedido.paginaPix,
-    pedido.linkPagamento,
-    pedido.pdfBoleto,
-  ];
-  for (final value in values) {
+Future<String?> _resolvePreferredLink(Pedido pedido) async {
+  final directValues = [pedido.paginaPix, pedido.linkPagamento];
+  for (final value in directValues) {
     final text = value?.trim();
     if (text != null && text.isNotEmpty && _isHttpUrl(text)) return text;
+  }
+
+  final boletoPdf = pedido.pdfBoleto?.trim();
+  if (boletoPdf != null && boletoPdf.isNotEmpty && _isHttpUrl(boletoPdf)) {
+    final resolved = await ApiService.resolveBoletoPaymentLink(boletoPdf);
+    if (resolved != null && resolved.isNotEmpty) return resolved;
+    return boletoPdf;
   }
   return null;
 }

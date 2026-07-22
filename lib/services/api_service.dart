@@ -9,10 +9,6 @@ typedef SessionExpiredCallback = void Function();
 class ApiService {
   static const String _baseUrl = 'https://api.greenexpress.com.br';
 
-  /// Colaborador fixo para atribuição de comissão — Vendedora Karol.
-  /// Todos os pedidos e cálculos de frete são atrelados a este ID.
-  static const int karolColaboradorId = 1959;
-
   static String? _token;
   static String? _userId;
   static int? _tokenExp; // Unix timestamp de expiração
@@ -248,25 +244,15 @@ class ApiService {
     }
 
     try {
-      // Injeta identificação de atendimento da Karol na observação para rastreamento
-      final observacaoFinal = [
-        if (observacao.trim().isNotEmpty) observacao.trim(),
-        'Atendimento: Karol (colaboradorId=$karolColaboradorId)',
-      ].join(' | ');
-
       final body = {
         'revendedorId': int.tryParse(_userId!) ?? 0,
         'formaPagamentoId': formaPagamentoId, 'tipoEntrega': tipoEntrega,
         'quantidadeParcela': quantidadeParcela, 'valorTotal': valorTotal,
-        'produtos': produtos, 'observacao': observacaoFinal,
+        'produtos': produtos, 'observacao': observacao,
         'valorGreenCash': valorGreenCash, 'valorFrete': valorFrete ?? 0,
         'valorDesconto': 0, 'cupomDescontoId': null,
-        // Campos tentativos para atribuição de comissão (se o backend aceitar)
-        'colaboradorId': karolColaboradorId,
-        'vendedorId': karolColaboradorId,
       };
-      final uri = Uri.parse('$_baseUrl/api/pedidosrevendedor?colaboradorId=$karolColaboradorId&vendedorId=$karolColaboradorId');
-      final r = await http.post(uri, headers: _headers, body: jsonEncode(body)).timeout(const Duration(seconds: 30));
+      final r = await http.post(Uri.parse('$_baseUrl/api/pedidosrevendedor'), headers: _headers, body: jsonEncode(body)).timeout(const Duration(seconds: 30));
       if (r.statusCode == 200 || r.statusCode == 201) {
         final b = r.body.trim();
         if (b.isEmpty) return {'success': true, 'data': {}};
@@ -284,11 +270,35 @@ class ApiService {
   static Future<Map<String, dynamic>> getFormasPagamento() async => _safeGet('$_baseUrl/api/formaspagamentos');
   static Future<Map<String, dynamic>> getTiposEntrega() async => _safeGet('$_baseUrl/api/tiposentregapedido');
 
+  static Future<String?> resolveBoletoPaymentLink(String boletoPdfUrl) async {
+    try {
+      final pdfResp = await http.get(Uri.parse(boletoPdfUrl), headers: _headers).timeout(const Duration(seconds: 30));
+      if (pdfResp.statusCode != 200 || pdfResp.bodyBytes.isEmpty) return null;
+
+      final raw = latin1.decode(pdfResp.bodyBytes, allowInvalid: true);
+      final directMatch = RegExp(r'https://data\\.cel\\.cash/greenexpress/cobranca-pix/[A-Za-z0-9-]+').firstMatch(raw);
+      if (directMatch != null) return directMatch.group(0);
+
+      final redirectMatch = RegExp(r'https://cel\\.cash/q/[A-Za-z0-9/_-]+').firstMatch(raw);
+      final candidate = redirectMatch?.group(0);
+      if (candidate == null || candidate.isEmpty) return null;
+
+      final redirectResp = await http.get(Uri.parse(candidate), headers: _headers).timeout(const Duration(seconds: 30));
+      final finalUrl = redirectResp.request?.url.toString();
+      if (finalUrl != null && finalUrl.isNotEmpty && finalUrl != candidate) {
+        return finalUrl;
+      }
+      return candidate;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<Map<String, dynamic>> calcularFrete({required int tipoEntrega, required double valorTotal}) async {
     await _loadToken();
     if (_userId == null) return {'success': false, 'error': 'Não autenticado'};
     try {
-      final r = await http.get(Uri.parse('$_baseUrl/api/frete?tipoEntrega=$tipoEntrega&colaboradorId=$karolColaboradorId&valorTotal=$valorTotal&clienteRepresentanteId=$_userId'), headers: _headers).timeout(const Duration(seconds: 30));
+      final r = await http.get(Uri.parse('$_baseUrl/api/frete?tipoEntrega=$tipoEntrega&colaboradorId=$_userId&valorTotal=$valorTotal&clienteRepresentanteId=$_userId'), headers: _headers).timeout(const Duration(seconds: 30));
       if (r.statusCode == 200) { final b = r.body.trim(); if (b.isEmpty) return {'success': true, 'data': {'valorFrete': 0.0}}; try { return {'success': true, 'data': jsonDecode(b)}; } catch (_) { return {'success': true, 'data': {'valorFrete': 0.0}}; } }
       if (r.statusCode == 401) { _handle401(); return {'success': false, 'error': 'Sessão expirada', 'unauthorized': true}; }
       return {'success': false, 'error': 'Erro ${r.statusCode}'};

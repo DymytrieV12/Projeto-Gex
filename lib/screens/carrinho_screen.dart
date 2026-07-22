@@ -177,19 +177,16 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
       if (!mounted) return;
 
       if (isBoletoPix && pedidoPagamento != null && pedidoPagamento.temDadosPagamento) {
-        final linkPagto = pedidoPagamento.paginaPix ??
-            pedidoPagamento.linkPagamento ??
-            pedidoPagamento.pdfBoleto;
+        final linkPagto = pedidoPagamento.paginaPix ?? pedidoPagamento.linkPagamento;
         final linkValido = linkPagto != null &&
             linkPagto.trim().isNotEmpty &&
             (linkPagto.startsWith('http://') || linkPagto.startsWith('https://'));
 
         if (linkValido) {
-          // Abre o link direto no navegador interno do app.
-          // A página já exibe QR Code e código copia e cola organizados.
+          // Abre direto o link final de pagamento, quando a API já retornar esse link.
           await openPagamentoNoApp(context, linkPagto);
         } else {
-          // Fallback: sheet com QR local caso o link não venha.
+          // Caso só exista o PDF do boleto, a sheet resolve o link exato do PIX a partir do PDF.
           await showPagamentoSheet(
             context,
             pedidoPagamento,
