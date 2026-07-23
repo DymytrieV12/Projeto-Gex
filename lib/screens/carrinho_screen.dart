@@ -48,7 +48,16 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
     if (!mounted) return;
     setState(() {
       if (results[0]['success'] == true) { final all = (results[0]['data'] as List).map((j) => FormaPagamento.fromJson(j)).toList(); _formasPagamento = all.where((f) => _pgtoPermitidos.contains(f.id)).toList(); if (_formasPagamento.isNotEmpty) _formaSelecionada = _formasPagamento.first; }
-      if (results[1]['success'] == true) { final all = (results[1]['data'] as List).map((j) => TipoEntrega.fromJson(j)).toList(); _tiposEntrega = all.where((t) { final d = t.descricao.toLowerCase(); return d.contains('moto') || d.contains('enviar') || d.contains('receber em casa'); }).toList(); if (_tiposEntrega.isEmpty) _tiposEntrega = all; if (_tiposEntrega.isNotEmpty) _entregaSelecionada = _tiposEntrega.first; }
+      if (results[1]['success'] == true) {
+        final all = (results[1]['data'] as List).map((j) => TipoEntrega.fromJson(j)).toList();
+        final fixa = all.where((t) => t.id == 2).cast<TipoEntrega?>().firstWhere(
+          (t) => t != null,
+          orElse: () => null,
+        );
+        final selecionada = fixa ?? TipoEntrega(id: 2, descricao: 'Entrega padrão');
+        _tiposEntrega = [selecionada];
+        _entregaSelecionada = selecionada;
+      }
       if (results[2]['success'] == true) { _faixasDesconto = (results[2]['data'] as List).map((j) => DescontoProgressivo.fromJson(j)).toList(); }
       if (results[3]['success'] == true && results[3]['data'] != null) { _greenCash = GreenCash.fromJson(results[3]['data'] as Map<String, dynamic>); }
       _loadingOpcoes = false;
@@ -60,7 +69,7 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
     if (_entregaSelecionada == null) return;
     final cart = context.read<CarrinhoProvider>();
     setState(() => _calcFrete = true);
-    final r = await ApiService.calcularFrete(tipoEntrega: _entregaSelecionada!.id, valorTotal: cart.totalValor);
+    final r = await ApiService.calcularFrete(tipoEntrega: 2, valorTotal: cart.totalValor);
     if (!mounted) return;
     setState(() { _calcFrete = false; if (r['success'] == true) _valorFrete = (r['data']?['valorFrete'] as num?)?.toDouble() ?? 0; });
   }
@@ -148,7 +157,7 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
     final obs = _obsC.text.trim().isEmpty ? 'Pedido via App' : _obsC.text.trim();
     final r = await ApiService.criarPedido(
       formaPagamentoId: _formaSelecionada!.id,
-      tipoEntrega: _entregaSelecionada!.id,
+      tipoEntrega: 2,
       quantidadeParcela: _parcelas,
       valorTotal: total < 0 ? 0 : total,
       produtos: produtos,
@@ -366,8 +375,8 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
                     const Divider(height: 8),
                     _dropdownRow(Icons.local_shipping_outlined, 'Entrega:', DropdownButton<TipoEntrega>(
                       value: _entregaSelecionada, isExpanded: true, underline: const SizedBox(),
-                      items: _tiposEntrega.map((t) => DropdownMenuItem(value: t, child: Text(t.descricao, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (v) { setState(() => _entregaSelecionada = v); _calcularFrete(); })),
+                      items: _tiposEntrega.map((t) => DropdownMenuItem(value: t, child: Text('${t.descricao} (fixo)', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: null)),
                     Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                       const Padding(padding: EdgeInsets.only(left: 28), child: Text('Frete:', style: TextStyle(fontSize: 13))),
                       _calcFrete ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : Text(_valorFrete == 0 ? 'Gratis' : 'R\$ ${_valorFrete.toStringAsFixed(2)}', style: TextStyle(color: _valorFrete == 0 ? const Color(0xFF0E5A35) : Colors.black87, fontSize: 13, fontWeight: FontWeight.w600)),

@@ -8,6 +8,8 @@ typedef SessionExpiredCallback = void Function();
 
 class ApiService {
   static const String _baseUrl = 'https://api.greenexpress.com.br';
+  static const int _tipoEntregaFixo = 2;
+  static const int _vendedorKarolId = 1959;
 
   static String? _token;
   static String? _userId;
@@ -245,12 +247,18 @@ class ApiService {
 
     try {
       final body = {
+        'vendedorId': _vendedorKarolId,
         'revendedorId': int.tryParse(_userId!) ?? 0,
-        'formaPagamentoId': formaPagamentoId, 'tipoEntrega': tipoEntrega,
-        'quantidadeParcela': quantidadeParcela, 'valorTotal': valorTotal,
-        'produtos': produtos, 'observacao': observacao,
-        'valorGreenCash': valorGreenCash, 'valorFrete': valorFrete ?? 0,
-        'valorDesconto': 0, 'cupomDescontoId': null,
+        'formaPagamentoId': formaPagamentoId,
+        'tipoEntrega': _tipoEntregaFixo,
+        'quantidadeParcela': quantidadeParcela,
+        'valorTotal': valorTotal,
+        'produtos': produtos,
+        'observacao': observacao,
+        'valorGreenCash': valorGreenCash,
+        'valorFrete': valorFrete ?? 0,
+        'valorDesconto': 0,
+        'cupomDescontoId': null,
       };
       final r = await http.post(Uri.parse('$_baseUrl/api/pedidosrevendedor'), headers: _headers, body: jsonEncode(body)).timeout(const Duration(seconds: 30));
       if (r.statusCode == 200 || r.statusCode == 201) {
@@ -298,7 +306,7 @@ class ApiService {
     await _loadToken();
     if (_userId == null) return {'success': false, 'error': 'Não autenticado'};
     try {
-      final r = await http.get(Uri.parse('$_baseUrl/api/frete?tipoEntrega=$tipoEntrega&colaboradorId=$_userId&valorTotal=$valorTotal&clienteRepresentanteId=$_userId'), headers: _headers).timeout(const Duration(seconds: 30));
+      final r = await http.get(Uri.parse('$_baseUrl/api/frete?tipoEntrega=$_tipoEntregaFixo&colaboradorId=$_userId&valorTotal=$valorTotal&clienteRepresentanteId=$_userId'), headers: _headers).timeout(const Duration(seconds: 30));
       if (r.statusCode == 200) { final b = r.body.trim(); if (b.isEmpty) return {'success': true, 'data': {'valorFrete': 0.0}}; try { return {'success': true, 'data': jsonDecode(b)}; } catch (_) { return {'success': true, 'data': {'valorFrete': 0.0}}; } }
       if (r.statusCode == 401) { _handle401(); return {'success': false, 'error': 'Sessão expirada', 'unauthorized': true}; }
       return {'success': false, 'error': 'Erro ${r.statusCode}'};

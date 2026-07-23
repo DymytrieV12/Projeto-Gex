@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
-import '../screens/in_app_browser_screen.dart';
 import '../services/api_service.dart';
 
 Future<void> showPagamentoSheet(
@@ -207,12 +206,33 @@ Future<void> showPagamentoSheet(
 }
 
 Future<void> openPagamentoNoApp(BuildContext context, String url) async {
-  if (!context.mounted) return;
-  await Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => InAppBrowserScreen(url: url, title: 'Pagamento do pedido'),
-    ),
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Link de pagamento inválido')),
+    );
+    return;
+  }
+
+  final openedInApp = await launchUrl(
+    uri,
+    mode: LaunchMode.inAppBrowserView,
+    browserConfiguration: const BrowserConfiguration(showTitle: true),
   );
+
+  if (openedInApp) return;
+
+  final openedExternal = await launchUrl(
+    uri,
+    mode: LaunchMode.externalApplication,
+  );
+
+  if (!openedExternal && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Não foi possível abrir o link de pagamento')),
+    );
+  }
 }
 
 Future<String?> _resolvePreferredLink(Pedido pedido) async {
