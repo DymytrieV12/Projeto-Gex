@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +24,7 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
   String _erro = '';
   final _searchC = TextEditingController();
   final Set<String> _expanded = {};
+  Timer? _searchDebounce;
 
   @override
   bool get wantKeepAlive => true; // Manter estado ao trocar aba
@@ -34,15 +36,23 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
   }
 
   @override
-  void dispose() { _searchC.dispose(); super.dispose(); }
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchC.dispose();
+    super.dispose();
+  }
 
   Future<void> _load({bool forceRefresh = false}) async {
     // Usar cache se disponível e < 5 min
     if (!forceRefresh && _cachedProdutos != null && _cacheTime != null) {
       final age = DateTime.now().difference(_cacheTime!);
       if (age.inMinutes < 5) {
-        final cats = _cachedProdutos!.map((p) => p.tipoProduto ?? 'Outros').toSet();
-        setState(() { _todos = _cachedProdutos!; _filtrados = _cachedProdutos!; _expanded.addAll(cats); _loading = false; });
+        setState(() {
+          _todos = _cachedProdutos!;
+          _filtrados = _cachedProdutos!;
+          _expanded.clear();
+          _loading = false;
+        });
         return;
       }
     }
@@ -53,27 +63,71 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
     if (r['success'] == true) {
       final data = r['data'];
       final list = data is List ? data : <dynamic>[];
-      final produtos = list.whereType<Map>().map((e) => Produto.fromJson(Map<String, dynamic>.from(e))).where((p) => p.ativo).toList();
-      final cats = produtos.map((p) => p.tipoProduto ?? 'Outros').toSet();
+      final produtos = list
+          .whereType<Map>()
+          .map((e) => Produto.fromJson(Map<String, dynamic>.from(e)))
+          .where((p) => p.ativo)
+          .toList();
       _cachedProdutos = produtos;
       _cacheTime = DateTime.now();
-      setState(() { _todos = produtos; _filtrados = produtos; _expanded.addAll(cats); _loading = false; });
+      setState(() {
+        _todos = produtos;
+        _filtrados = produtos;
+        _expanded.clear();
+        _loading = false;
+      });
     } else {
       setState(() { _loading = false; _erro = r['error']?.toString() ?? 'Erro'; });
     }
   }
 
   void _filter(String q) {
-    setState(() { _filtrados = q.isEmpty ? _todos : _todos.where((p) => p.nome.toLowerCase().contains(q.toLowerCase())).toList(); });
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      final query = q.trim().toLowerCase();
+      setState(() {
+        _filtrados = query.isEmpty
+            ? _todos
+            : _todos.where((p) {
+                final categoria = _categoriaProduto(p).toLowerCase();
+                return p.nome.toLowerCase().contains(query) ||
+                    categoria.contains(query) ||
+                    (p.tipoProduto?.toLowerCase().contains(query) ?? false);
+              }).toList();
+      });
+    });
+  }
+
+  String _categoriaProduto(Produto p) {
+    final categoria = p.categoria?.trim();
+    if (categoria != null && categoria.isNotEmpty) return categoria;
+    final tipo = p.tipoProduto?.trim();
+    if (tipo != null && tipo.isNotEmpty) return tipo;
+    return 'Outros';
   }
 
   Map<String, List<Produto>> get _grouped {
     final map = <String, List<Produto>>{};
-    for (final p in _filtrados) { map.putIfAbsent(p.tipoProduto ?? 'Outros', () => []).add(p); }
-    return Map.fromEntries(map.entries.toList()..sort((a, b) { if (a.key == 'Frasco') return -1; if (b.key == 'Frasco') return 1; return a.key.compareTo(b.key); }));
+    for (final p in _filtrados) {
+      map.putIfAbsent(_categoriaProduto(p), () => []).add(p);
+    }
+    final entries = map.entries.toList()
+      ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
+    return Map.fromEntries(entries);
   }
 
-  IconData _catIcon(String cat) { switch (cat.toLowerCase()) { case 'frasco': return Icons.science_outlined; case 'saco': return Icons.inventory_2_outlined; default: return Icons.category_outlined; } }
+  IconData _catIcon(String cat) {
+    final value = cat.toLowerCase();
+    if (value.contains('frasco')) return Icons.science_outlined;
+    if (value.contains('saco') || value.contains('refil')) {
+      return Icons.inventory_2_outlined;
+    }
+    if (value.contains('capsula') || value.contains('cápsula')) {
+      return Icons.medication_outlined;
+    }
+    return Icons.category_outlined;
+  }
 
   void _showDetail(Produto p) {
     showModalBottomSheet(
@@ -99,12 +153,12 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
                     padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(ctx).padding.bottom + 24),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Center(child: Container(width: 42, height: 5, margin: const EdgeInsets.only(bottom: 14), decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(999)))),
-                      if (p.imagemUrl != null) ClipRRect(borderRadius: BorderRadius.circular(22), child: Image.network(p.imagemUrl!, width: double.infinity, height: 240, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 180, color: Colors.grey[100], child: const Center(child: Icon(Icons.eco, size: 60, color: Color(0xFF0E5A35)))))),
+                      if (p.imagemUrl != null) ClipRRect(borderRadius: BorderRadius.circular(22), child: Image.network(p.imagemUrl!, width: double.infinity, height: 240, fit: BoxFit.cover, cacheWidth: 900, filterQuality: FilterQuality.low, errorBuilder: (_, __, ___) => Container(height: 180, color: Colors.grey[100], child: const Center(child: Icon(Icons.eco, size: 60, color: Color(0xFF0E5A35)))))),
                       const SizedBox(height: 16),
                       Text(p.nome, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 6),
                       Text('R\$ ${p.precoExibicao.toStringAsFixed(2)}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF0E5A35))),
-                      if (p.tipoProduto != null) ...[const SizedBox(height: 10), Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5), decoration: BoxDecoration(color: const Color(0xFF0E5A35).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Text(p.tipoProduto!, style: const TextStyle(color: Color(0xFF0E5A35), fontWeight: FontWeight.w600)))],
+                      if (_categoriaProduto(p).isNotEmpty) ...[const SizedBox(height: 10), Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5), decoration: BoxDecoration(color: const Color(0xFF0E5A35).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Text(_categoriaProduto(p), style: const TextStyle(color: Color(0xFF0E5A35), fontWeight: FontWeight.w600)))],
                       if (p.descricao != null && p.descricao!.isNotEmpty) ...[const SizedBox(height: 18), const Text('Sobre o produto', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)), const SizedBox(height: 6), Text(p.descricao!, style: TextStyle(color: Colors.grey[700], fontSize: 15, height: 1.6))],
                       const SizedBox(height: 24),
                       _DetailCartWidget(produto: p),
@@ -123,7 +177,8 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final cart = context.watch<CarrinhoProvider>();
+    final totalItens = context.select<CarrinhoProvider, int>((c) => c.totalItens);
+    final totalValor = context.select<CarrinhoProvider, double>((c) => c.totalValor);
 
     return Container(
       // Fundo com brasão sutil da marca
@@ -158,14 +213,23 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
                       : RefreshIndicator(
                           onRefresh: () => _load(forceRefresh: true),
                           child: ListView(
-                            padding: EdgeInsets.fromLTRB(10, 4, 10, cart.totalItens > 0 ? 80 : 8),
+                            padding: EdgeInsets.fromLTRB(10, 4, 10, totalItens > 0 ? 80 : 8),
                             children: _grouped.entries.map((e) => _buildCat(e.key, e.value, _expanded.contains(e.key))).toList(),
                           ),
                         ),
             ),
           ]),
-          if (cart.totalItens > 0)
-            Positioned(left: 12, right: 12, bottom: 8, child: _CartFloatingBar(cart: cart, onTap: () => Navigator.pushNamed(context, '/carrinho'))),
+          if (totalItens > 0)
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 8,
+              child: _CartFloatingBar(
+                totalItens: totalItens,
+                totalValor: totalValor,
+                onTap: () => Navigator.pushNamed(context, '/carrinho'),
+              ),
+            ),
         ],
       ),
     );
@@ -213,9 +277,14 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
 
 // ── Floating Cart Bar (iFood) ──
 class _CartFloatingBar extends StatelessWidget {
-  final CarrinhoProvider cart;
+  final int totalItens;
+  final double totalValor;
   final VoidCallback onTap;
-  const _CartFloatingBar({required this.cart, required this.onTap});
+  const _CartFloatingBar({
+    required this.totalItens,
+    required this.totalValor,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -233,8 +302,8 @@ class _CartFloatingBar extends StatelessWidget {
           Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.shopping_cart_rounded, color: Colors.white, size: 20)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text('R\$ ${cart.totalValor.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-            Text('${cart.totalItens} ${cart.totalItens == 1 ? "item" : "itens"}', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12)),
+            Text('R\$ ${totalValor.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            Text('${totalItens} ${totalItens == 1 ? "item" : "itens"}', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12)),
           ])),
           Container(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
             child: const Text('Ver carrinho', style: TextStyle(color: Color(0xFF0E5A35), fontWeight: FontWeight.bold, fontSize: 14))),
@@ -264,9 +333,14 @@ class _GlassProductCardState extends State<_GlassProductCard> {
 
   @override
   Widget build(BuildContext context) {
-    final cart = context.watch<CarrinhoProvider>();
-    final inCart = cart.itens.where((i) => i.produtoId == widget.produto.id).firstOrNull;
-    if (inCart != null && _qty != inCart.quantidade) { _qty = inCart.quantidade; _qtyC.text = '$_qty'; }
+    final inCartQty = context.select<CarrinhoProvider, int>((cart) {
+      for (final item in cart.itens) {
+        if (item.produtoId == widget.produto.id) return item.quantidade;
+      }
+      return 0;
+    });
+    final cart = context.read<CarrinhoProvider>();
+    if (inCartQty > 0 && _qty != inCartQty) { _qty = inCartQty; _qtyC.text = '$_qty'; }
 
     return Container(
       decoration: BoxDecoration(
@@ -299,7 +373,7 @@ class _GlassProductCardState extends State<_GlassProductCard> {
           aspectRatio: 1.05,
           child: Stack(children: [
             widget.produto.imagemUrl != null
-                ? Image.network(widget.produto.imagemUrl!, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _ph())
+                ? Image.network(widget.produto.imagemUrl!, width: double.infinity, fit: BoxFit.cover, cacheWidth: 420, filterQuality: FilterQuality.low, errorBuilder: (_, __, ___) => _ph())
                 : _ph(),
             // Reflexo sutil no topo da imagem
             Positioned(top: 0, left: 0, right: 0, height: 30,
@@ -334,7 +408,7 @@ class _GlassProductCardState extends State<_GlassProductCard> {
                 cart.addItem(p.id, p.nome, p.precoExibicao, p.imagemUrl, _qty);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_qty}x ${p.nome}'), backgroundColor: const Color(0xFF0E5A35), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), duration: const Duration(seconds: 1)));
               }, style: ElevatedButton.styleFrom(padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), textStyle: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold)),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_shopping_cart, size: 12), const SizedBox(width: 3), Text(inCart != null ? 'Atualizar' : 'Comprar')]))),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_shopping_cart, size: 12), const SizedBox(width: 3), Text(inCartQty > 0 ? 'Atualizar' : 'Comprar')]))),
           ]),
         )),
       ]),

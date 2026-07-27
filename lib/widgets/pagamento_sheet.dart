@@ -78,14 +78,14 @@ Future<void> showPagamentoSheet(
                   const SizedBox(height: 10),
                   _actionButton(
                     icon: Icons.open_in_new_rounded,
-                    label: 'Abrir pagamento no app',
+                    label: 'Abrir link PIX/Pagamento',
                     color: const Color(0xFF0E5A35),
                     onPressed: () => openPagamentoNoApp(ctx, linkPrincipal),
                   ),
                   const SizedBox(height: 10),
                   _actionButton(
                     icon: Icons.copy_rounded,
-                    label: 'Copiar link',
+                    label: 'Copiar link PIX/Pagamento',
                     color: const Color(0xFF1B6B43),
                     onPressed: () =>
                         _copyText(ctx, linkPrincipal, 'Link copiado'),
@@ -181,6 +181,15 @@ Future<void> showPagamentoSheet(
                 ),
                 const SizedBox(height: 12),
                 _actionButton(
+                  icon: Icons.picture_as_pdf_rounded,
+                  label: 'Visualizar boleto',
+                  color: const Color(0xFF2E6B4A),
+                  onPressed: (boletoPdf ?? '').isEmpty
+                      ? null
+                      : () => _openUrlDefault(ctx, boletoPdf!),
+                ),
+                const SizedBox(height: 12),
+                _actionButton(
                   icon: Icons.download_rounded,
                   label: 'Baixar boleto',
                   color: const Color(0xFF0C4D2C),
@@ -239,15 +248,24 @@ Future<String?> _resolvePreferredLink(Pedido pedido) async {
   final directValues = [pedido.paginaPix, pedido.linkPagamento];
   for (final value in directValues) {
     final text = value?.trim();
-    if (text != null && text.isNotEmpty && _isHttpUrl(text)) return text;
+    if (text != null && text.isNotEmpty && _isHttpUrl(text) && !_isPdfUrl(text)) {
+      return text;
+    }
   }
 
-  final boletoPdf = pedido.pdfBoleto?.trim();
-  if (boletoPdf != null && boletoPdf.isNotEmpty && _isHttpUrl(boletoPdf)) {
+  final boletoPdf = pedido.pdfBoleto?.trim() ??
+      directValues
+          .map((e) => e?.trim())
+          .whereType<String>()
+          .firstWhere((e) => _isPdfUrl(e), orElse: () => '');
+
+  if (boletoPdf.isNotEmpty && _isHttpUrl(boletoPdf)) {
     final resolved = await ApiService.resolveBoletoPaymentLink(boletoPdf);
-    if (resolved != null && resolved.isNotEmpty) return resolved;
-    return boletoPdf;
+    if (resolved != null && resolved.isNotEmpty && !_isPdfUrl(resolved)) {
+      return resolved;
+    }
   }
+
   return null;
 }
 
@@ -393,6 +411,17 @@ Future<void> _copyText(BuildContext context, String value, String message) async
   );
 }
 
+Future<void> _openUrlDefault(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return;
+  final ok = await launchUrl(uri, mode: LaunchMode.platformDefault);
+  if (!ok && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Não foi possível visualizar o boleto.')),
+    );
+  }
+}
+
 Future<void> _openUrlExternal(BuildContext context, String url) async {
   final uri = Uri.tryParse(url);
   if (uri == null) return;
@@ -419,4 +448,10 @@ Uint8List? _decodeImageBytes(String? value) {
 bool _isHttpUrl(String? value) {
   if (value == null) return false;
   return value.startsWith('http://') || value.startsWith('https://');
+}
+
+bool _isPdfUrl(String? value) {
+  if (!_isHttpUrl(value)) return false;
+  final text = value!.toLowerCase();
+  return text.contains('.pdf') || text.contains('/pdf') || text.contains('boleto');
 }
