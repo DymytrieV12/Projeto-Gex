@@ -284,19 +284,39 @@ class ApiService {
       if (pdfResp.statusCode != 200 || pdfResp.bodyBytes.isEmpty) return null;
 
       final raw = latin1.decode(pdfResp.bodyBytes, allowInvalid: true);
-      final directMatch = RegExp(r'https://data\\.cel\\.cash/greenexpress/cobranca-pix/[A-Za-z0-9-]+').firstMatch(raw);
-      if (directMatch != null) return directMatch.group(0);
 
-      final redirectMatch = RegExp(r'https://cel\\.cash/q/[A-Za-z0-9/_-]+').firstMatch(raw);
-      final candidate = redirectMatch?.group(0);
-      if (candidate == null || candidate.isEmpty) return null;
+      final directLinks = RegExp(
+        r'https://data\.cel\.cash/greenexpress/cobranca-pix/[A-Za-z0-9-]+',
+      ).allMatches(raw).map((m) => m.group(0)!).toList();
+      if (directLinks.isNotEmpty) return directLinks.last;
 
-      final redirectResp = await http.get(Uri.parse(candidate), headers: _headers).timeout(const Duration(seconds: 30));
-      final finalUrl = redirectResp.request?.url.toString();
-      if (finalUrl != null && finalUrl.isNotEmpty && finalUrl != candidate) {
+      final shortLinks = RegExp(
+        r'https://cel\.cash/q/[A-Za-z0-9/_-]+',
+      ).allMatches(raw).map((m) => m.group(0)!).toList();
+
+      for (final candidate in shortLinks.reversed) {
+        final resolved = await _followPaymentRedirect(candidate);
+        if (resolved != null && resolved.isNotEmpty) return resolved;
+      }
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> _followPaymentRedirect(String url) async {
+    try {
+      final resp = await http.get(Uri.parse(url), headers: _headers).timeout(const Duration(seconds: 30));
+      final finalUrl = resp.request?.url.toString();
+      if (finalUrl != null &&
+          finalUrl.isNotEmpty &&
+          finalUrl != url &&
+          finalUrl.contains('data.cel.cash/greenexpress/cobranca-pix/')) {
         return finalUrl;
       }
-      return candidate;
+      if (url.contains('data.cel.cash/greenexpress/cobranca-pix/')) return url;
+      return finalUrl == null || finalUrl.isEmpty ? url : finalUrl;
     } catch (_) {
       return null;
     }

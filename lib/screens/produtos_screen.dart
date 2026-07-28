@@ -11,6 +11,94 @@ import '../providers/carrinho_provider.dart';
 List<Produto>? _cachedProdutos;
 DateTime? _cacheTime;
 
+const Map<String, List<String>> _catalogoPermitido = {
+  'Lançamento': [
+    'PósMoun BEAUTY | Neutro',
+    'PósMoun FORÇA | Neutro',
+  ],
+  'Cuidados femininos': [
+    'Ácido Hialurônico',
+    'Afrodite',
+    'Femme Soft',
+    'Green Gummy',
+  ],
+  'Emagrecedores': [
+    'Gold',
+    'Premium',
+    'Suco Detox',
+    'Turbo',
+  ],
+  'Chas Naturais': [
+    'Green Line Chá Premium',
+  ],
+  'Vitaminas': [
+    '5Magnésios',
+    'Bio Neuro',
+    'ColageMix',
+    'Colageno Tipo 2',
+    'Complexo Vitaminas B',
+    'Cúrcuma',
+    'Eros Turbo',
+    'Ferro Ácido Fólico com Vitamina B12',
+    'Melatonina',
+    'Ômega 3',
+    'Vitamina K2',
+  ],
+  'Para sua dor': [
+    'Resolvedor',
+  ],
+  'Para seu treino': [
+    'Creatina',
+    'Metabolic',
+  ],
+  'Green Store': [
+    'Catálogo - CICLO 02',
+    'Kit Divulgação 1 (Premium, Turbo e Resolvedor) 5 Unidades de CADA',
+  ],
+};
+
+final Map<String, String> _produtoCategoriaPermitida = () {
+  final map = <String, String>{};
+  _catalogoPermitido.forEach((categoria, produtos) {
+    for (final nome in produtos) {
+      map[_normalizarTextoProduto(nome)] = categoria;
+    }
+  });
+  return map;
+}();
+
+final Map<String, int> _ordemCategoriasPermitidas = {
+  for (var i = 0; i < _catalogoPermitido.keys.length; i++)
+    _catalogoPermitido.keys.elementAt(i): i,
+};
+
+final Map<String, int> _ordemProdutosPermitidos = () {
+  final map = <String, int>{};
+  var index = 0;
+  for (final produtos in _catalogoPermitido.values) {
+    for (final nome in produtos) {
+      map[_normalizarTextoProduto(nome)] = index++;
+    }
+  }
+  return map;
+}();
+
+String _normalizarTextoProduto(String value) {
+  var text = value.toLowerCase().trim();
+  const replacements = {
+    'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
+    'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+    'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+    'ó': 'o', 'ò': 'o', 'õ': 'o', 'ô': 'o', 'ö': 'o',
+    'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+    'ç': 'c',
+  };
+  replacements.forEach((from, to) => text = text.replaceAll(from, to));
+  text = text.replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return text;
+}
+
 class ProdutosScreen extends StatefulWidget {
   const ProdutosScreen({super.key});
   @override
@@ -58,22 +146,32 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
     }
 
     setState(() { _loading = true; _erro = ''; });
-    final r = await ApiService.getProdutos(pageSize: 200);
+    final r = await ApiService.getProdutos(pageSize: 500);
     if (!mounted) return;
     if (r['success'] == true) {
       final data = r['data'];
       final list = data is List ? data : <dynamic>[];
-      final produtos = list
+      final produtosBrutos = list
           .whereType<Map>()
           .map((e) => Produto.fromJson(Map<String, dynamic>.from(e)))
           .where((p) => p.ativo)
           .toList();
+      final vistos = <String>{};
+      final produtos = produtosBrutos.where((p) {
+        final key = _normalizarTextoProduto(p.nome);
+        if (!_produtoCategoriaPermitida.containsKey(key)) return false;
+        if (vistos.contains(key)) return false;
+        vistos.add(key);
+        return true;
+      }).toList();
       _cachedProdutos = produtos;
       _cacheTime = DateTime.now();
       setState(() {
         _todos = produtos;
         _filtrados = produtos;
-        _expanded.clear();
+        _expanded
+          ..clear()
+          ..addAll(_catalogoPermitido.keys);
         _loading = false;
       });
     } else {
@@ -100,6 +198,10 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
   }
 
   String _categoriaProduto(Produto p) {
+    final categoriaMapeada = _produtoCategoriaPermitida[_normalizarTextoProduto(p.nome)];
+    if (categoriaMapeada != null && categoriaMapeada.isNotEmpty) {
+      return categoriaMapeada;
+    }
     final categoria = p.categoria?.trim();
     if (categoria != null && categoria.isNotEmpty) return categoria;
     final tipo = p.tipoProduto?.trim();
@@ -113,7 +215,20 @@ class _ProdutosScreenState extends State<ProdutosScreen> with AutomaticKeepAlive
       map.putIfAbsent(_categoriaProduto(p), () => []).add(p);
     }
     final entries = map.entries.toList()
-      ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
+      ..sort((a, b) {
+        final catA = _ordemCategoriasPermitidas[a.key] ?? 999;
+        final catB = _ordemCategoriasPermitidas[b.key] ?? 999;
+        if (catA != catB) return catA.compareTo(catB);
+        return a.key.toLowerCase().compareTo(b.key.toLowerCase());
+      });
+    for (final entry in entries) {
+      entry.value.sort((a, b) {
+        final ordA = _ordemProdutosPermitidos[_normalizarTextoProduto(a.nome)] ?? 9999;
+        final ordB = _ordemProdutosPermitidos[_normalizarTextoProduto(b.nome)] ?? 9999;
+        if (ordA != ordB) return ordA.compareTo(ordB);
+        return a.nome.toLowerCase().compareTo(b.nome.toLowerCase());
+      });
+    }
     return Map.fromEntries(entries);
   }
 

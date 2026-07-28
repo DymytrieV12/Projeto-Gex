@@ -162,6 +162,8 @@ class Pedido {
       pixMap?['page'],
       json['pixPage'],
       json['paginaPix'],
+      _deepFindValue(json, 'page'),
+      _deepFindValue(json, 'paymentLink'),
       json['paymentLink'],
       json['linkPagamento'],
     ]);
@@ -183,9 +185,10 @@ class Pedido {
     ]);
 
     final linkPagamento = _firstNonEmptyString([
+      paginaPix,
+      _deepFindValue(json, 'paymentLink'),
       json['linkPagamento'],
       json['paymentLink'],
-      paginaPix,
       pdfBoleto,
     ]);
 
