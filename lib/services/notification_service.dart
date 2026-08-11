@@ -2,12 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/models.dart';
 import 'api_service.dart';
 
-/// Notifica\u00e7\u00e3o local exibida no sininho do app.
+/// Notificação local exibida no sininho do app.
 class AppNotification {
   final String id;
   final String type; // 'status', 'promo', 'sistema'
@@ -41,17 +42,28 @@ class AppNotification {
         type: j['type']?.toString() ?? 'sistema',
         title: j['title']?.toString() ?? '',
         body: j['body']?.toString() ?? '',
-        createdAtIso: j['createdAtIso']?.toString() ?? DateTime.now().toIso8601String(),
+        createdAtIso:
+            j['createdAtIso']?.toString() ?? DateTime.now().toIso8601String(),
         read: j['read'] as bool? ?? false,
       );
 }
 
-/// Servi\u00e7o de notifica\u00e7\u00f5es baseado em polling do endpoint de pedidos.
-/// Detecta altera\u00e7\u00f5es de status e gera notifica\u00e7\u00f5es locais.
+/// Serviço de notificações baseado em polling do endpoint de pedidos.
+/// Detecta alterações de status e gera notificações locais nativas.
 class NotificationService extends ChangeNotifier {
-  static const Duration _pollInterval = Duration(minutes: 5);
+  static const Duration _pollInterval = Duration(minutes: 20);
   static const int _maxNotifications = 50;
+  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+    'pedido_status_channel',
+    'Status dos pedidos',
+    description: 'Notificações nativas sobre alterações de status dos pedidos',
+    importance: Importance.high,
+  );
 
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+
+  bool _localReady = false;
   Timer? _timer;
   bool _polling = false;
   List<AppNotification> _items = [];
@@ -63,8 +75,8 @@ class NotificationService extends ChangeNotifier {
   String get _statusKey => 'pedidos_status_${ApiService.userId ?? "global"}';
 
   Future<void> init() async {
+    await _initLocalNotifications();
     await _restore();
-    // Primeira sincroniza\u00e7\u00e3o em background
     unawaited(syncNow());
     _timer?.cancel();
     _timer = Timer.periodic(_pollInterval, (_) => syncNow());
@@ -74,6 +86,28 @@ class NotificationService extends ChangeNotifier {
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _initLocalNotifications() async {
+    if (_localReady) return;
+
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const darwin = DarwinInitializationSettings();
+    const settings = InitializationSettings(
+      android: android,
+      iOS: darwin,
+      macOS: darwin,
+    );
+
+    await _localNotifications.initialize(settings);
+
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(_channel);
+    await androidPlugin?.requestNotificationsPermission();
+
+    _localReady = true;
   }
 
   Future<void> _restore() async {
@@ -135,16 +169,15 @@ class NotificationService extends ChangeNotifier {
           final oldStatus = oldMap[entry.key]?.toString();
           final newStatus = entry.value;
           if (oldStatus != null && oldStatus.isNotEmpty && oldStatus != newStatus) {
-            _items.insert(
-              0,
-              AppNotification(
-                id: 'status_${entry.key}_${DateTime.now().millisecondsSinceEpoch}',
-                type: 'status',
-                title: 'Pedido #${entry.key} atualizado',
-                body: 'Status: "$oldStatus" \u2192 "$newStatus"',
-                createdAtIso: DateTime.now().toIso8601String(),
-              ),
+            final notification = AppNotification(
+              id: 'status_${entry.key}_${DateTime.now().millisecondsSinceEpoch}',
+              type: 'status',
+              title: 'Pedido #${entry.key} atualizado',
+              body: 'Status: "$oldStatus" → "$newStatus"',
+              createdAtIso: DateTime.now().toIso8601String(),
             );
+            _items.insert(0, notification);
+            unawaited(_showNativeNotification(notification));
             changed = true;
           }
         }
@@ -159,10 +192,32 @@ class NotificationService extends ChangeNotifier {
         notifyListeners();
       }
     } catch (_) {
-      // silencioso \u2014 polling em background
+      // silencioso — polling em background
     } finally {
       _polling = false;
     }
+  }
+
+  Future<void> _showNativeNotification(AppNotification item) async {
+    if (!_localReady) return;
+
+    final android = AndroidNotificationDetails(
+      _channel.id,
+      _channel.name,
+      channelDescription: _channel.description,
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+    const darwin = DarwinNotificationDetails();
+
+    await _localNotifications.show(
+      item.id.hashCode,
+      item.title,
+      item.body,
+      NotificationDetails(android: android, iOS: darwin, macOS: darwin),
+      payload: item.id,
+    );
   }
 
   Future<void> markAllRead() async {
@@ -176,13 +231,14 @@ class NotificationService extends ChangeNotifier {
   Future<void> clear() async {
     _items.clear();
     await _persist();
+    await _localNotifications.cancelAll();
     notifyListeners();
   }
 
   Future<void> reset() async {
-    // Usado no logout \u2014 limpa snapshot para novo usu\u00e1rio
     _timer?.cancel();
     _items.clear();
+    await _localNotifications.cancelAll();
     notifyListeners();
   }
 }

@@ -116,6 +116,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                             ),
                             const Spacer(),
+                            TextButton.icon(
+                              onPressed: notif.items.isEmpty
+                                  ? null
+                                  : () async {
+                                      await notif.clear();
+                                      if (ctx.mounted) Navigator.pop(ctx);
+                                      if (mounted) _showNotifications(notif);
+                                    },
+                              icon: const Icon(Icons.delete_sweep_rounded),
+                              label: const Text('Limpar tudo'),
+                            ),
                             IconButton(
                               tooltip: 'Atualizar agora',
                               onPressed: () async {
@@ -129,7 +140,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'O app consulta a API a cada 5 minutos e gera notificações quando o status do pedido muda.',
+                          'O app consulta a API a cada 20 minutos e gera notificações nativas quando o status do pedido muda.',
                           style: TextStyle(color: Colors.grey[700], fontSize: 12.5),
                         ),
                         const SizedBox(height: 16),

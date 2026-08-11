@@ -245,25 +245,28 @@ Future<void> openPagamentoNoApp(BuildContext context, String url) async {
 }
 
 Future<String?> _resolvePreferredLink(Pedido pedido) async {
-  final directValues = [pedido.paginaPix, pedido.linkPagamento];
-  for (final value in directValues) {
-    final text = value?.trim();
-    if (text != null && text.isNotEmpty && _isHttpUrl(text) && !_isPdfUrl(text)) {
-      return text;
-    }
+  final directValues = [pedido.paginaPix, pedido.linkPagamento]
+      .map((e) => e?.trim())
+      .whereType<String>()
+      .where((e) => e.isNotEmpty && _isHttpUrl(e))
+      .toList();
+
+  for (final link in directValues) {
+    if (_isPixPaymentUrl(link)) return link;
   }
 
   final boletoPdf = pedido.pdfBoleto?.trim() ??
-      directValues
-          .map((e) => e?.trim())
-          .whereType<String>()
-          .firstWhere((e) => _isPdfUrl(e), orElse: () => '');
+      directValues.firstWhere((e) => _isPdfUrl(e), orElse: () => '');
 
   if (boletoPdf.isNotEmpty && _isHttpUrl(boletoPdf)) {
     final resolved = await ApiService.resolveBoletoPaymentLink(boletoPdf);
-    if (resolved != null && resolved.isNotEmpty && !_isPdfUrl(resolved)) {
+    if (resolved != null && resolved.isNotEmpty && _isPixPaymentUrl(resolved)) {
       return resolved;
     }
+  }
+
+  for (final link in directValues) {
+    if (!_isPdfUrl(link)) return link;
   }
 
   return null;
@@ -454,4 +457,11 @@ bool _isPdfUrl(String? value) {
   if (!_isHttpUrl(value)) return false;
   final text = value!.toLowerCase();
   return text.contains('.pdf') || text.contains('/pdf') || text.contains('boleto');
+}
+
+bool _isPixPaymentUrl(String? value) {
+  if (!_isHttpUrl(value)) return false;
+  final text = value!.toLowerCase();
+  return text.contains('data.cel.cash/greenexpress/cobranca-pix/') ||
+      text.contains('cel.cash/q/');
 }
