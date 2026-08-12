@@ -1,9 +1,11 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/carrinho_provider.dart';
 import 'services/api_service.dart';
+import 'services/fcm_service.dart';
 import 'services/notification_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
@@ -15,6 +17,12 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicialização do Firebase/FCM.
+  // Quando o projeto tiver sido configurado com flutterfire configure
+  // e possuir firebase_options.dart, a inicialização interna do FcmService
+  // deve usar DefaultFirebaseOptions.currentPlatform.
+  await FcmService.instance.initialize();
 
   // Garantir que a barra de navegação do sistema não sobreponha o app
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -41,6 +49,20 @@ class _GreenExpressAppState extends State<GreenExpressApp> {
 
     // Registrar callback global de sessão expirada
     ApiService.onSessionExpired = _onSessionExpired;
+
+    FcmService.instance.attachInteractionHandlers(
+      onTap: _onRemoteNotificationTap,
+    );
+  }
+
+  Future<void> _onRemoteNotificationTap(RemoteMessage message) async {
+    final nav = navigatorKey.currentState;
+    if (nav == null) return;
+
+    // TODO: quando o backend/painel passar dados estruturados no payload
+    // (ex.: screen=pedidos, pedidoId=123), usar esses valores para navegação
+    // direcionada dentro do app.
+    nav.pushNamedAndRemoveUntil('/home', (route) => false);
   }
 
   void _onSessionExpired() {
