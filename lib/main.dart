@@ -1,7 +1,9 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/carrinho_provider.dart';
 import 'services/api_service.dart';
@@ -18,10 +20,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicialização do Firebase/FCM.
-  // Quando o projeto tiver sido configurado com flutterfire configure
-  // e possuir firebase_options.dart, a inicialização interna do FcmService
-  // deve usar DefaultFirebaseOptions.currentPlatform.
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await FcmService.instance.initialize();
 
   // Garantir que a barra de navegação do sistema não sobreponha o app

@@ -9,20 +9,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../firebase_options.dart';
+
 /// Handler para mensagens recebidas com o app encerrado/em background.
-///
-/// IMPORTANTE:
-/// Quando o projeto tiver o arquivo gerado pelo `flutterfire configure`
-/// (`firebase_options.dart`), a inicialização abaixo deve ser trocada para:
-/// Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
-    await Firebase.initializeApp();
-  } catch (_) {
-    // Se o Firebase ainda não estiver configurado nativamente no projeto,
-    // apenas ignoramos para não quebrar o app.
-  }
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  } catch (_) {}
 }
 
 typedef FcmTapHandler = Future<void> Function(RemoteMessage message);
@@ -33,6 +31,7 @@ class FcmService {
 
   static const String _tokenStorageKey = 'fcm_device_token';
   static const String _lastMessageKey = 'fcm_last_message';
+  static const String _broadcastTopic = 'greenexpress_revendedores';
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'green_express_fcm',
     'Mensagens do app',
@@ -50,7 +49,11 @@ class FcmService {
 
   Future<void> initialize() async {
     try {
-      await Firebase.initializeApp();
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      }
       _firebaseReady = true;
     } catch (e, st) {
       debugPrint('FCM: Firebase não pôde ser inicializado: $e');
@@ -63,6 +66,7 @@ class FcmService {
     await _initLocalNotifications();
     await _requestPermission();
     await _captureAndPersistToken();
+    await _subscribeDefaultTopics();
 
     FirebaseMessaging.instance.onTokenRefresh.listen((token) {
       unawaited(_persistDeviceToken(token));
@@ -158,6 +162,17 @@ class FcmService {
     }
   }
 
+  Future<void> _subscribeDefaultTopics() async {
+    if (!_firebaseReady) return;
+
+    try {
+      await FirebaseMessaging.instance.subscribeToTopic(_broadcastTopic);
+      debugPrint('FCM inscrito no tópico: $_broadcastTopic');
+    } catch (e) {
+      debugPrint('FCM: falha ao inscrever no tópico padrão: $e');
+    }
+  }
+
   Future<void> _persistDeviceToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getString(_tokenStorageKey);
@@ -169,6 +184,8 @@ class FcmService {
     // um endpoint dedicado, por exemplo:
     // POST /api/dispositivos/push-token { token, plataforma, usuarioId }
     // Esse passo é necessário para disparo de notificações direcionadas.
+    // Sem backend, o painel do Firebase já pode disparar mensagens em massa
+    // usando o tópico padrão: greenexpress_revendedores.
     debugPrint('FCM token atualizado: $token');
   }
 

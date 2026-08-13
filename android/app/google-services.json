@@ -1,0 +1,69 @@
+{
+  "project_info": {
+    "project_number": "912812799729",
+    "firebase_url": "https://projeto-gex-default-rtdb.firebaseio.com",
+    "project_id": "projeto-gex",
+    "storage_bucket": "projeto-gex.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:912812799729:android:5d12635948eb1020ab9b50",
+        "android_client_info": {
+          "package_name": "com.greenexpress.green_express_orders"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "912812799729-8lppcf88n4bp44k2q4dbsglcad4ifih7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIBDUoMrGKdieKgfQlZgL7Rg-QLmctIjE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "912812799729-8lppcf88n4bp44k2q4dbsglcad4ifih7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:912812799729:android:7398d7e9ab6075a0ab9b50",
+        "android_client_info": {
+          "package_name": "com.greenexpress.orders"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "912812799729-8lppcf88n4bp44k2q4dbsglcad4ifih7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIBDUoMrGKdieKgfQlZgL7Rg-QLmctIjE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "912812799729-8lppcf88n4bp44k2q4dbsglcad4ifih7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
