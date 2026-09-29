@@ -1,6 +1,6 @@
 name: green_express_orders
 description: Green Express para Revendedores
-version: 1.0.0+17
+version: 1.7.8+178
 environment:
   sdk: ^3.5.0
 dependencies:
