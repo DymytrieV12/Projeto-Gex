@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.greenexpress.green_express_orders"
+    namespace = "com.greenexpress.orders"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
@@ -31,7 +31,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.greenexpress.green_express_orders"
+        applicationId = "com.greenexpress.orders"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode

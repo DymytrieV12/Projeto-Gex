@@ -2,7 +2,8 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
-/// Configuração gerada manualmente a partir do google-services.json fornecido.
+  /// Configuração gerada manualmente a partir do google-services.json fornecido.
+  /// Cliente Android alinhado ao package `com.greenexpress.orders`.
 ///
 /// Quando o projeto for configurado oficialmente com `flutterfire configure`,
 /// este arquivo pode ser substituído pelo gerado automaticamente.
@@ -41,7 +42,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCIBDUoMrGKdieKgfQlZgL7Rg-QLmctIjE',
-    appId: '1:912812799729:android:5d12635948eb1020ab9b50',
+    appId: '1:912812799729:android:7398d7e9ab6075a0ab9b50',
     messagingSenderId: '912812799729',
     projectId: 'projeto-gex',
     storageBucket: 'projeto-gex.firebasestorage.app',
