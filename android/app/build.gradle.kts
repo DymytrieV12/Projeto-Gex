@@ -10,7 +10,7 @@ plugins {
 
 // Carregar keystore properties para assinatura de release
 val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("app/../android/key.properties")
+val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
