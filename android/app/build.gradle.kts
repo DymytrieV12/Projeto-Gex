@@ -32,7 +32,7 @@ android {
 
     defaultConfig {
         applicationId = "com.greenexpress.orders"
-        minSdk = 23 // firebase_messaging exige 23+
+        minSdk = 24 // exigido pela Protecao Automatica do Google Play
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
