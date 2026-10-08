@@ -1,10 +1,18 @@
 # ═══════════════════════════════════════════════════════════
-# 🤖 Green Express — Android Build (APK)
+# 🤖 Green Express — Android Build (AAB para Google Play + APK)
 # ═══════════════════════════════════════════════════════════
 #
-# Gera o APK release automaticamente a cada push na main.
-# Não requer secrets — build não assinado (debug key).
-# Para build assinado, adicionar keystore como secret.
+# Gera o AAB (Play Store) e o APK release a cada push na main
+# ou manualmente em Actions > "Run workflow".
+#
+# SECRETS (Settings > Secrets and variables > Actions):
+#   ANDROID_KEYSTORE_BASE64   → keystore de upload em base64
+#   ANDROID_KEYSTORE_PASSWORD → senha da keystore
+#   ANDROID_KEY_ALIAS         → alias da chave (ex.: upload)
+#   ANDROID_KEY_PASSWORD      → senha da chave
+#
+# Sem os secrets, o build sai assinado com a chave de debug
+# (serve para testar, mas NÃO é aceito pela Google Play).
 # ═══════════════════════════════════════════════════════════
 
 name: "🤖 Android Build"
@@ -24,9 +32,9 @@ env:
 
 jobs:
   build_android:
-    name: "🔨 Build Android APK"
+    name: "🔨 Build Android AAB + APK"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: "📥 Checkout código"
@@ -45,14 +53,48 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: "🔑 Configurar assinatura (keystore de upload)"
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::Secrets da keystore não configurados — build será assinado com chave DEBUG (não aceito pela Play Store)."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          {
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "storeFile=upload-keystore.jks"
+          } > android/key.properties
+          echo "✅ Keystore configurada"
+
       - name: "📦 Instalar dependências"
         run: flutter pub get
 
       - name: "🔍 Analisar código"
         run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
 
+      - name: "🏗️ Build AAB Release (Google Play)"
+        run: flutter build appbundle --release --no-tree-shake-icons
+
       - name: "🏗️ Build APK Release"
         run: flutter build apk --release --no-tree-shake-icons
+
+      - name: "🧾 Conferir assinatura do AAB"
+        run: |
+          keytool -printcert -jarfile build/app/outputs/bundle/release/app-release.aab | grep -E "Owner|SHA256" || true
+
+      - name: "📤 Upload AAB"
+        uses: actions/upload-artifact@v4
+        with:
+          name: green-express-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
 
       - name: "📤 Upload APK"
         uses: actions/upload-artifact@v4
@@ -60,3 +102,7 @@ jobs:
           name: green-express-android
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      - name: "🧹 Remover keystore do runner"
+        if: always()
+        run: rm -f android/app/upload-keystore.jks android/key.properties
